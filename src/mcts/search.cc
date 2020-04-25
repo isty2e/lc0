@@ -261,15 +261,14 @@ std::vector<std::string> Search::GetVerboseStats(Node* node) const {
   const float U_coeff =
       cpuct * std::sqrt(std::max(node->GetChildrenVisits(), 1u));
   const bool logit_q = params_.GetLogitQ();
-  const float m_slope = params_.GetMovesLeftSlope();
-  const float m_cap = params_.GetMovesLeftMaxEffect();
-  const float a = params_.GetMovesLeftConstantFactor();
-  const float b = params_.GetMovesLeftScaledFactor();
-  const float c = params_.GetMovesLeftQuadraticFactor();
+  const float mlu_static_c = params_.GetMovesLeftStaticUtilityFactor();
+  const float mlu_dynamic_c = params_.GetMovesLeftDynamicUtilityFactor();
+  const float mlu_steepness = params_.GetMovesLeftUtilitySteepness();
+  const float m_initial = params_.GetMovesLeftInitialExpectedValue();
+  const float m_center_scale = params_.GetMovesLeftCenterScalingFactor();
   const bool do_moves_left_adjustment =
       network_->GetCapabilities().moves_left !=
-          pblczero::NetworkFormat::MOVES_LEFT_NONE &&
-      (std::abs(node->GetQ(0.0f)) > params_.GetMovesLeftThreshold());
+          pblczero::NetworkFormat::MOVES_LEFT_NONE;
   std::vector<EdgeAndNode> edges;
   for (const auto& edge : node->Edges()) edges.push_back(edge);
 
@@ -293,10 +292,17 @@ std::vector<std::string> Search::GetVerboseStats(Node* node) const {
         << edge.GetMove(is_black_to_move).as_string();
     
     float Q = edge.GetQ(fpu, draw_score, logit_q);
-    float M_effect = do_moves_left_adjustment 
-        ? (std::clamp(m_slope * edge.GetM(0.0f), -m_cap, m_cap) *
-            std::copysign(1.0f, -Q) * (a + b * std::abs(Q) + c * Q * Q)) 
-        : 0.0f;
+    float M0 = is_root ? m_initial : root_node_->GetM();
+    float ML_utility = 0.0f;
+    if (do_moves_left_adjustment) {
+      float M = edge.GetM(0.0f);
+      float mlu_static = mlu_static_c * Q * 
+          FastLogistic2(-1.0f * mlu_steepness * M);
+      float mlu_dynamic = mlu_dynamic_c * Q *
+          FastLogistic2(-1.0f * mlu_steepness * (M - M0 * m_center_scale));
+      ML_utility = mlu_static + mlu_dynamic;
+    } 
+    
 
     // TODO: should this be displaying transformed index?
     oss << " (" << std::setw(4) << edge.GetMove().as_nn_index(0) << ")";
@@ -326,7 +332,7 @@ std::vector<std::string> Search::GetVerboseStats(Node* node) const {
         << ") ";
 
     oss << "(S: " << std::setw(8) << std::setprecision(5)
-        << Q + edge.GetU(U_coeff) + M_effect << ") ";
+        << Q + edge.GetU(U_coeff) + ML_utility << ") ";
 
     oss << "(V: ";
     std::optional<float> v;
@@ -1066,9 +1072,7 @@ SearchWorker::NodeToProcess SearchWorker::PickNodeToExtend(
     const float fpu = GetFpu(params_, node, is_root_node, draw_score);
 
     const float node_q = node->GetQ(0.0f);
-    const bool do_moves_left_adjustment =
-        moves_left_support_ &&
-        (std::abs(node_q) > params_.GetMovesLeftThreshold());
+    const bool do_moves_left_adjustment = moves_left_support_;
 
     for (auto child : node->Edges()) {
       if (is_root_node) {
@@ -1093,16 +1097,18 @@ SearchWorker::NodeToProcess SearchWorker::PickNodeToExtend(
       const float Q = child.GetQ(fpu, draw_score, params_.GetLogitQ());
       float M = 0.0f;
       if (do_moves_left_adjustment) {
-        const float m_slope = params_.GetMovesLeftSlope();
-        const float m_cap = params_.GetMovesLeftMaxEffect();
-        const float parent_m = node->GetM();
+        const float mlu_static_c = params_.GetMovesLeftStaticUtilityFactor();
+        const float mlu_dynamic_c = params_.GetMovesLeftDynamicUtilityFactor();
+        const float mlu_steepness = params_.GetMovesLeftUtilitySteepness();
+        const float m_initial = params_.GetMovesLeftInitialExpectedValue();
+        const float m_center_scale = params_.GetMovesLeftCenterScalingFactor();
+        const float parent_m = is_root_node ? m_initial : node->GetM();
         const float child_m = child.GetM(parent_m);
-        M = std::clamp(m_slope * (child_m - parent_m), -m_cap, m_cap) *
-            std::copysign(1.0f, -Q);
-        const float a = params_.GetMovesLeftConstantFactor();
-        const float b = params_.GetMovesLeftScaledFactor();
-        const float c = params_.GetMovesLeftQuadraticFactor();
-        M *= a + b * std::abs(Q) + c * Q * Q;
+        const float mlu_static = mlu_static_c * Q * 
+            FastLogistic2(-1.0f * mlu_steepness * child_m);
+        const float mlu_dynamic = mlu_dynamic_c * Q *
+            FastLogistic2(-1.0f * mlu_steepness * (child_m - parent_m * m_center_scale));
+        M = mlu_static + mlu_dynamic;
       }
 
       const float score = child.GetU(puct_mult) + Q + M;
