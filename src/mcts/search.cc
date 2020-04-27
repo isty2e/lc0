@@ -1107,7 +1107,8 @@ SearchWorker::NodeToProcess SearchWorker::PickNodeToExtend(
         const float mlu_static = mlu_static_c * Q * 
             FastLogistic2(-1.0f * mlu_steepness * child_m);
         const float mlu_dynamic = mlu_dynamic_c * Q *
-            FastLogistic2(-1.0f * mlu_steepness * (child_m - parent_m * m_center_scale));
+            FastLogistic2(-1.0f * mlu_steepness * 
+            (child_m - parent_m * m_center_scale));
         M = mlu_static + mlu_dynamic;
       }
 
