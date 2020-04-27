@@ -1071,7 +1071,6 @@ SearchWorker::NodeToProcess SearchWorker::PickNodeToExtend(
         (depth % 2 == 0) ? odd_draw_score : even_draw_score;
     const float fpu = GetFpu(params_, node, is_root_node, draw_score);
 
-    const float node_q = node->GetQ(0.0f);
     const bool do_moves_left_adjustment = moves_left_support_;
 
     for (auto child : node->Edges()) {
