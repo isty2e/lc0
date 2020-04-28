@@ -295,10 +295,12 @@ std::vector<std::string> Search::GetVerboseStats(Node* node) const {
     float ML_utility = 0.0f;
     if (do_moves_left_adjustment) {
       float M = edge.GetM(0.0f);
-      float M0 = is_root ? m_initial : root_node_->GetM();
+      Node* root_parent_ = root_node_->GetParent();
+      uint16_t depth = is_root ? 1 : 2;
+      float M0 = (root_parent_ == nullptr) ? m_initial : root_parent_->GetM();
       float mlu_static = Q * FastLogistic2(-mlu_steepness * M);
       float mlu_dynamic = Q * FastLogistic2(-mlu_steepness *
-          (M - M0 * m_center_scale));
+          (M + depth - M0 * m_center_scale));
       ML_utility = mlu_static_c * mlu_static + mlu_dynamic_c * mlu_dynamic;
     } 
     
@@ -1100,11 +1102,14 @@ SearchWorker::NodeToProcess SearchWorker::PickNodeToExtend(
         const float mlu_steepness = params_.GetMovesLeftUtilitySteepness();
         const float m_initial = params_.GetMovesLeftInitialExpectedValue();
         const float m_center_scale = params_.GetMovesLeftCenterScalingFactor();
-        const float parent_m = is_root_node ? m_initial : node->GetM();
-        const float child_m = child.GetM(parent_m);
+        const Node* root_parent_ = search_->root_node_->GetParent();
+        const float M0 = (root_parent_ == nullptr) ? 
+            m_initial : root_parent_->GetM();
+        const float parent_m = node->GetM();
+        const float child_m = child.GetM(parent_m + 1);
         const float mlu_static = Q * FastLogistic2(-mlu_steepness * child_m);
         const float mlu_dynamic = Q * FastLogistic2(-mlu_steepness * 
-            (child_m - parent_m * m_center_scale));
+            (child_m + depth + 1 - M0 * m_center_scale));
         M = mlu_static_c * mlu_static + mlu_dynamic_c * mlu_dynamic;
       }
 
