@@ -300,7 +300,7 @@ std::vector<std::string> Search::GetVerboseStats(Node* node) const {
       float M0 = (root_parent_ == nullptr) ? m_initial : root_parent_->GetM();
       float mlu_static = Q * FastLogistic2(-mlu_steepness * M);
       float mlu_dynamic = Q * FastLogistic2(-mlu_steepness *
-          (M + depth - M0 * m_center_scale));
+          (M - (M0 - depth) * m_center_scale));
       ML_utility = mlu_static_c * mlu_static + mlu_dynamic_c * mlu_dynamic;
     } 
     
@@ -1109,7 +1109,7 @@ SearchWorker::NodeToProcess SearchWorker::PickNodeToExtend(
         const float child_m = child.GetM(parent_m + 1);
         const float mlu_static = Q * FastLogistic2(-mlu_steepness * child_m);
         const float mlu_dynamic = Q * FastLogistic2(-mlu_steepness * 
-            (child_m + depth + 1 - M0 * m_center_scale));
+            (child_m - (M0 - depth - 1) * m_center_scale));
         M = mlu_static_c * mlu_static + mlu_dynamic_c * mlu_dynamic;
       }
 
