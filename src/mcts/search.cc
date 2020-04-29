@@ -295,13 +295,18 @@ std::vector<std::string> Search::GetVerboseStats(Node* node) const {
     float ML_utility = 0.0f;
     if (do_moves_left_adjustment) {
       float M = edge.GetM(0.0f);
-      Node* root_parent_ = root_node_->GetParent();
-      uint16_t depth = is_root ? 1 : 2;
-      float M0 = (root_parent_ == nullptr) ? m_initial : root_parent_->GetM();
-      float mlu_static = Q * FastLogistic2(-mlu_steepness * M);
-      float mlu_dynamic = Q * FastLogistic2(-mlu_steepness *
-          (M - (M0 - depth) * m_center_scale));
-      ML_utility = mlu_static_c * mlu_static + mlu_dynamic_c * mlu_dynamic;
+      float mlu_static = Q * (-M / (1.0f / mlu_steepness + fabs(M)) + 1.0f);
+      ML_utility = mlu_static_c * mlu_static;
+      if (mlu_dynamic_c > 0.0f) {
+        Node* root_parent_ = root_node_->GetParent();
+        uint16_t depth = is_root ? 1 : 2;
+        float M0 = (root_parent_ == nullptr) ?
+            m_initial : root_parent_->GetM();
+        float M_eff = M - (M0 - depth) * m_center_scale;
+        float mlu_dynamic = Q * (-M_eff / (1.0f / mlu_steepness +
+            fabs(M_eff)) + 1.0f);
+        ML_utility += mlu_dynamic_c * mlu_dynamic;
+      }
     } 
     
 
@@ -1102,15 +1107,20 @@ SearchWorker::NodeToProcess SearchWorker::PickNodeToExtend(
         const float mlu_steepness = params_.GetMovesLeftUtilitySteepness();
         const float m_initial = params_.GetMovesLeftInitialExpectedValue();
         const float m_center_scale = params_.GetMovesLeftCenterScalingFactor();
-        const Node* root_parent_ = search_->root_node_->GetParent();
-        const float M0 = (root_parent_ == nullptr) ? 
-            m_initial : root_parent_->GetM();
         const float parent_m = node->GetM();
         const float child_m = child.GetM(parent_m + 1);
-        const float mlu_static = Q * FastLogistic2(-mlu_steepness * child_m);
-        const float mlu_dynamic = Q * FastLogistic2(-mlu_steepness * 
-            (child_m - (M0 - depth - 1) * m_center_scale));
-        M = mlu_static_c * mlu_static + mlu_dynamic_c * mlu_dynamic;
+        const float mlu_static = Q * (-child_m / (1.0f / mlu_steepness +
+            fabs(child_m)) + 1.0f);
+        M = mlu_static_c * mlu_static;
+        if (mlu_dynamic_c > 0.0f) {
+          const Node* root_parent_ = search_->root_node_->GetParent();
+          const float M0 = (root_parent_ == nullptr) ?
+              m_initial : root_parent_->GetM();
+          const float M_eff = child_m - (M0 - depth - 1) * m_center_scale;
+          const float mlu_dynamic = Q * (-M_eff / (1.0f / mlu_steepness +
+              fabs(M_eff)) + 1.0f);
+          M += mlu_dynamic_c * mlu_dynamic;
+        }
       }
 
       const float score = child.GetU(puct_mult) + Q + M;

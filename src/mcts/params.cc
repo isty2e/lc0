@@ -304,7 +304,8 @@ void SearchParams::Populate(OptionsParser* options) {
       1.0f;
   options->Add<FloatOption>(kMovesLeftDynamicUtilityFactorId, 0.0f, 100.0f) =
       3.0f;
-  options->Add<FloatOption>(kMovesLeftUtilitySteepnessId, 0.0f, 100.0f) = 0.1f;
+  options->Add<FloatOption>(kMovesLeftUtilitySteepnessId, 0.001f, 100.0f) =
+      0.1f;
   options->Add<FloatOption>(kMovesLeftInitialExpectedValueId, 0.0f, 200.0f) =
       110.0f;
   options->Add<FloatOption>(kMovesLeftCenterScalingFactorId, 0.0f, 2.0f) =
